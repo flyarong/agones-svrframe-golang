@@ -36,11 +36,6 @@ import (
 
 type matcher func(*agonesv1.GameServer) bool
 
-// readyGameServerMatcher return true when a GameServer is in a Ready state.
-func readyGameServerMatcher(gs *agonesv1.GameServer) bool {
-	return gs.Status.State == agonesv1.GameServerStateReady
-}
-
 // readyOrAllocatedGameServerMatcher returns true when a GameServer is in a Ready or Allocated state.
 func readyOrAllocatedGameServerMatcher(gs *agonesv1.GameServer) bool {
 	return gs.Status.State == agonesv1.GameServerStateReady || gs.Status.State == agonesv1.GameServerStateAllocated
@@ -63,12 +58,7 @@ func NewAllocationCache(informer informerv1.GameServerInformer, counter *gameser
 		gameServerSynced: informer.Informer().HasSynced,
 		gameServerLister: informer.Lister(),
 		counter:          counter,
-		matcher:          readyGameServerMatcher,
-	}
-
-	// if we can do state filtering, then cache both Ready and Allocated GameServers
-	if runtime.FeatureEnabled(runtime.FeatureStateAllocationFilter) {
-		c.matcher = readyOrAllocatedGameServerMatcher
+		matcher:          readyOrAllocatedGameServerMatcher,
 	}
 
 	_, _ = informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -78,6 +68,9 @@ func NewAllocationCache(informer informerv1.GameServerInformer, counter *gameser
 			newGs := newObj.(*agonesv1.GameServer)
 			key, ok := c.getKey(newGs)
 			if !ok {
+				return
+			}
+			if oldGs.ObjectMeta.ResourceVersion == newGs.ObjectMeta.ResourceVersion {
 				return
 			}
 			switch {
@@ -184,11 +177,9 @@ func (c *AllocationCache) ListSortedGameServers(gsa *allocationv1.GameServerAllo
 		gs1 := list[i]
 		gs2 := list[j]
 
-		if runtime.FeatureEnabled(runtime.FeatureStateAllocationFilter) {
-			// Search Allocated GameServers first.
-			if gs1.Status.State != gs2.Status.State {
-				return gs1.Status.State == agonesv1.GameServerStateAllocated
-			}
+		// Search Allocated GameServers first.
+		if gs1.Status.State != gs2.Status.State {
+			return gs1.Status.State == agonesv1.GameServerStateAllocated
 		}
 
 		c1, ok := counts[gs1.Status.NodeName]
@@ -237,14 +228,14 @@ func (c *AllocationCache) ListSortedGameServers(gsa *allocationv1.GameServerAllo
 			for _, priority := range gsa.Spec.Priorities {
 				res := compareGameServers(&priority, gs1, gs2)
 				switch priority.Order {
-				case allocationv1.GameServerAllocationAscending:
+				case agonesv1.GameServerPriorityAscending:
 					if res == -1 {
 						return true
 					}
 					if res == 1 {
 						return false
 					}
-				case allocationv1.GameServerAllocationDescending, "":
+				case agonesv1.GameServerPriorityDescending:
 					if res == -1 {
 						return false
 					}
@@ -262,44 +253,90 @@ func (c *AllocationCache) ListSortedGameServers(gsa *allocationv1.GameServerAllo
 	return list
 }
 
-// compareGameServers compares two game servers based on a CountsAndLists Priority
+// ListSortedGameServersPriorities sorts and returns a list of game servers based on the
+// list of Priorities.
+func (c *AllocationCache) ListSortedGameServersPriorities(gsa *allocationv1.GameServerAllocation) []*agonesv1.GameServer {
+	list := c.getGameServers()
+	if list == nil {
+		return []*agonesv1.GameServer{}
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		gs1 := list[i]
+		gs2 := list[j]
+
+		if runtime.FeatureEnabled(runtime.FeatureCountsAndLists) && (gsa != nil) {
+			for _, priority := range gsa.Spec.Priorities {
+				res := compareGameServers(&priority, gs1, gs2)
+				switch priority.Order {
+				case agonesv1.GameServerPriorityAscending:
+					if res == -1 {
+						return true
+					}
+					if res == 1 {
+						return false
+					}
+				case agonesv1.GameServerPriorityDescending:
+					if res == -1 {
+						return false
+					}
+					if res == 1 {
+						return true
+					}
+				}
+			}
+		}
+
+		// finally sort lexicographically, so we have a stable order
+		return gs1.GetObjectMeta().GetName() < gs2.GetObjectMeta().GetName()
+	})
+
+	return list
+}
+
+// compareGameServers compares two game servers based on a CountsAndLists Priority using available
+// capacity (Capacity - Count for Counters, and Capacity - len(Values) for Lists) as the comparison.
 // Returns -1 if gs1 < gs2; 1 if gs1 > gs2; 0 if gs1 == gs2; 0 if neither gamer server has the Priority.
 // If only one game server has the Priority, prefer that server. I.e. nil < gsX when Priority
 // Order is Descending (3, 2, 1, 0, nil), and nil > gsX when Order is Ascending (0, 1, 2, 3, nil).
-func compareGameServers(p *allocationv1.Priority, gs1, gs2 *agonesv1.GameServer) int {
+func compareGameServers(p *agonesv1.Priority, gs1, gs2 *agonesv1.GameServer) int {
 	var gs1ok, gs2ok bool
-	switch p.PriorityType {
-	case allocationv1.GameServerAllocationPriorityCounter:
+	switch p.Type {
+	case agonesv1.GameServerPriorityCounter:
 		// Check if both game servers contain the Counter.
 		counter1, ok1 := gs1.Status.Counters[p.Key]
 		counter2, ok2 := gs2.Status.Counters[p.Key]
 		// If both game servers have the Counter
 		if ok1 && ok2 {
-			if counter1.Count < counter2.Count {
+			availCapacity1 := counter1.Capacity - counter1.Count
+			availCapacity2 := counter2.Capacity - counter2.Count
+			if availCapacity1 < availCapacity2 {
 				return -1
 			}
-			if counter1.Count > counter2.Count {
+			if availCapacity1 > availCapacity2 {
 				return 1
 			}
-			if counter1.Count == counter2.Count {
+			if availCapacity1 == availCapacity2 {
 				return 0
 			}
 		}
 		gs1ok = ok1
 		gs2ok = ok2
-	case allocationv1.GameServerAllocationPriorityList:
+	case agonesv1.GameServerPriorityList:
 		// Check if both game servers contain the List.
 		list1, ok1 := gs1.Status.Lists[p.Key]
 		list2, ok2 := gs2.Status.Lists[p.Key]
 		// If both game servers have the List
 		if ok1 && ok2 {
-			if len(list1.Values) < len(list2.Values) {
+			availCapacity1 := list1.Capacity - int64(len(list1.Values))
+			availCapacity2 := list2.Capacity - int64(len(list2.Values))
+			if availCapacity1 < availCapacity2 {
 				return -1
 			}
-			if len(list1.Values) > len(list2.Values) {
+			if availCapacity1 > availCapacity2 {
 				return 1
 			}
-			if len(list1.Values) == len(list2.Values) {
+			if availCapacity1 == availCapacity2 {
 				return 0
 			}
 		}
@@ -308,10 +345,12 @@ func compareGameServers(p *allocationv1.Priority, gs1, gs2 *agonesv1.GameServer)
 	}
 	// If only one game server has the Priority, prefer that server. I.e. nil < gsX when Order is
 	// Descending (3, 2, 1, 0, nil), and nil > gsX when Order is Ascending (0, 1, 2, 3, nil).
-	if (gs1ok && p.Order == allocationv1.GameServerAllocationDescending) || (gs1ok && p.Order == "") || (gs2ok && p.Order == allocationv1.GameServerAllocationAscending) {
+	if (gs1ok && p.Order == agonesv1.GameServerPriorityDescending) ||
+		(gs2ok && p.Order == agonesv1.GameServerPriorityAscending) {
 		return 1
 	}
-	if (gs1ok && p.Order == allocationv1.GameServerAllocationAscending) || (gs2ok && p.Order == allocationv1.GameServerAllocationDescending) || (gs2ok && p.Order == "") {
+	if (gs1ok && p.Order == agonesv1.GameServerPriorityAscending) ||
+		(gs2ok && p.Order == agonesv1.GameServerPriorityDescending) {
 		return -1
 	}
 	// If neither game server has the Priority

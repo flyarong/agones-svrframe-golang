@@ -31,6 +31,7 @@ import (
 	"agones.dev/agones/pkg/util/runtime"
 	"agones.dev/agones/pkg/util/webhooks"
 	"agones.dev/agones/pkg/util/workerqueue"
+	"github.com/google/go-cmp/cmp"
 	"github.com/heptiolabs/healthcheck"
 	"github.com/mattbaird/jsonpatch"
 	"github.com/pkg/errors"
@@ -357,17 +358,42 @@ func (c *Controller) upsertGameServerSet(ctx context.Context, fleet *agonesv1.Fl
 			"Scaling active GameServerSet %s from %d to %d", gsSetCopy.ObjectMeta.Name, active.Spec.Replicas, gsSetCopy.Spec.Replicas)
 	}
 
+	// Update GameServerSet Counts and Lists Priorities if not equal to the Priorities on the Fleet
+	if runtime.FeatureEnabled(runtime.FeatureCountsAndLists) {
+		if !cmp.Equal(active.Spec.Priorities, fleet.Spec.Priorities) {
+			gsSetCopy := active.DeepCopy()
+			gsSetCopy.Spec.Priorities = fleet.Spec.Priorities
+			_, err := c.gameServerSetGetter.GameServerSets(fleet.ObjectMeta.Namespace).Update(ctx, gsSetCopy, metav1.UpdateOptions{})
+			if err != nil {
+				return errors.Wrapf(err, "error updating priorities for gameserverset for fleet %s", fleet.ObjectMeta.Name)
+			}
+			c.recorder.Eventf(fleet, corev1.EventTypeNormal, "UpdatingGameServerSet",
+				"Updated GameServerSet %s Priorities", gsSetCopy.ObjectMeta.Name)
+		}
+	}
+
 	return nil
 }
 
 // applyDeploymentStrategy applies the Fleet > Spec > Deployment strategy to all the non-active
 // GameServerSets that are passed in
 func (c *Controller) applyDeploymentStrategy(ctx context.Context, fleet *agonesv1.Fleet, active *agonesv1.GameServerSet, rest []*agonesv1.GameServerSet) (int32, error) {
-	// if there is nothing `rest`, then it's either brand Fleet, or we can just jump to the fleet value,
+	// if there is nothing `rest`, then it's either a brand-new Fleet, or we can just jump to the fleet value,
 	// since there is nothing else scaling down at this point
-
 	if len(rest) == 0 {
 		return fleet.Spec.Replicas, nil
+	}
+
+	// if we do have `rest` but all their spec.replicas is zero, we can just do subtraction against whatever is allocated in `rest`.
+	if agonesv1.SumSpecReplicas(rest) == 0 {
+		blocked := agonesv1.SumGameServerSets(rest, func(gsSet *agonesv1.GameServerSet) int32 {
+			return gsSet.Status.ReservedReplicas + gsSet.Status.AllocatedReplicas
+		})
+		replicas := fleet.Spec.Replicas - blocked
+		if replicas < 0 {
+			replicas = 0
+		}
+		return replicas, nil
 	}
 
 	switch fleet.Spec.Strategy.Type {

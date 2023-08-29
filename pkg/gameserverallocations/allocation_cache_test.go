@@ -57,7 +57,7 @@ func TestAllocationCacheListSortedGameServers(t *testing.T) {
 			Counters: map[string]agonesv1.CounterStatus{
 				"players": {
 					Count:    4,
-					Capacity: 40,
+					Capacity: 40, // Available Capacity == 36
 				},
 			}},
 	}
@@ -69,7 +69,7 @@ func TestAllocationCacheListSortedGameServers(t *testing.T) {
 			Counters: map[string]agonesv1.CounterStatus{
 				"players": {
 					Count:    14,
-					Capacity: 40,
+					Capacity: 40, // Available Capacity == 26
 				},
 			}},
 	}
@@ -80,22 +80,8 @@ func TestAllocationCacheListSortedGameServers(t *testing.T) {
 		features string
 		gsa      *allocationv1.GameServerAllocation
 	}{
-		"most allocated": {
-			// node1: 1 ready, 1 allocated, node2: 1 ready
-			list: []agonesv1.GameServer{gs1, gs2, gs3},
-			test: func(t *testing.T, list []*agonesv1.GameServer) {
-				assert.Len(t, list, 2)
-				if !assert.Equal(t, []*agonesv1.GameServer{&gs1, &gs2}, list) {
-					for _, gs := range list {
-						logrus.WithField("name", gs.Name).Info("game server")
-					}
-				}
-			},
-			features: fmt.Sprintf("%s=false", runtime.FeatureStateAllocationFilter),
-		},
 		"allocated first (StateAllocationFilter)": {
-			list:     []agonesv1.GameServer{gs1, gs2, gs3},
-			features: fmt.Sprintf("%s=true", runtime.FeatureStateAllocationFilter),
+			list: []agonesv1.GameServer{gs1, gs2, gs3},
 			test: func(t *testing.T, list []*agonesv1.GameServer) {
 				assert.Equal(t, []*agonesv1.GameServer{&gs3, &gs1, &gs2}, list)
 			},
@@ -143,18 +129,18 @@ func TestAllocationCacheListSortedGameServers(t *testing.T) {
 			features: fmt.Sprintf("%s=true", runtime.FeatureCountsAndLists),
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "Counter",
-							Key:          "players",
-							Order:        "Descending",
+							Type:  "Counter",
+							Key:   "players",
+							Order: "Descending",
 						},
 					},
 				},
 			},
 			test: func(t *testing.T, list []*agonesv1.GameServer) {
 				assert.Len(t, list, 6)
-				if !assert.Equal(t, []*agonesv1.GameServer{&gs3, &gs6, &gs5, &gs1, &gs2, &gs4}, list) {
+				if !assert.Equal(t, []*agonesv1.GameServer{&gs3, &gs5, &gs6, &gs1, &gs2, &gs4}, list) {
 					for _, gs := range list {
 						logrus.WithField("game", gs.Name).Info("game server")
 					}
@@ -166,18 +152,18 @@ func TestAllocationCacheListSortedGameServers(t *testing.T) {
 			features: fmt.Sprintf("%s=true", runtime.FeatureCountsAndLists),
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "Counter",
-							Key:          "players",
-							Order:        "Ascending",
+							Type:  "Counter",
+							Key:   "players",
+							Order: "Ascending",
 						},
 					},
 				},
 			},
 			test: func(t *testing.T, list []*agonesv1.GameServer) {
 				assert.Len(t, list, 6)
-				if !assert.Equal(t, []*agonesv1.GameServer{&gs3, &gs5, &gs6, &gs1, &gs2, &gs4}, list) {
+				if !assert.Equal(t, []*agonesv1.GameServer{&gs3, &gs6, &gs5, &gs1, &gs2, &gs4}, list) {
 					for _, gs := range list {
 						logrus.WithField("game", gs.Name).Info("game server")
 					}
@@ -221,7 +207,7 @@ func TestAllocationCacheListSortedGameServers(t *testing.T) {
 	}
 }
 
-func TestAllocationCacheCompareGameServers(t *testing.T) {
+func TestListSortedGameServersPriorities(t *testing.T) {
 	t.Parallel()
 	runtime.FeatureTestMutex.Lock()
 	defer runtime.FeatureTestMutex.Unlock()
@@ -232,24 +218,24 @@ func TestAllocationCacheCompareGameServers(t *testing.T) {
 			Lists: map[string]agonesv1.ListStatus{
 				"players": {
 					Values:   []string{"player1"},
-					Capacity: 100,
+					Capacity: 100, // Available Capacity == 99
 				},
 				"layers": {
 					Values:   []string{"layer1", "layer2", "layer3"},
-					Capacity: 100,
+					Capacity: 100, // Available Capacity == 97
 				}}}}
 	gs2 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs2", Namespace: defaultNs, UID: "2"},
 		Status: agonesv1.GameServerStatus{NodeName: "node1", State: agonesv1.GameServerStateReady,
 			Lists: map[string]agonesv1.ListStatus{
 				"players": {
 					Values:   []string{},
-					Capacity: 100,
+					Capacity: 100, // Available Capacity == 100
 				},
 			},
 			Counters: map[string]agonesv1.CounterStatus{
 				"assets": {
 					Count:    101,
-					Capacity: 1000,
+					Capacity: 1000, // Available Capacity = 899
 				},
 			}}}
 	gs3 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs3", Namespace: defaultNs, UID: "3"},
@@ -257,16 +243,16 @@ func TestAllocationCacheCompareGameServers(t *testing.T) {
 			Lists: map[string]agonesv1.ListStatus{
 				"players": {
 					Values:   []string{"player2", "player3"},
-					Capacity: 100,
+					Capacity: 100, // Available Capacity == 98
 				}},
 			Counters: map[string]agonesv1.CounterStatus{
 				"sessions": {
 					Count:    9,
-					Capacity: 1000,
+					Capacity: 1000, // Available Capacity == 991
 				},
 				"assets": {
 					Count:    100,
-					Capacity: 1000,
+					Capacity: 1000, // Available Capacity == 900
 				},
 			}}}
 	gs4 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs4", Namespace: defaultNs, UID: "4"},
@@ -274,41 +260,41 @@ func TestAllocationCacheCompareGameServers(t *testing.T) {
 			Counters: map[string]agonesv1.CounterStatus{
 				"sessions": {
 					Count:    99,
-					Capacity: 1000,
+					Capacity: 1000, // Available Capacity == 901
 				},
 			},
 			Lists: map[string]agonesv1.ListStatus{
 				"players": {
 					Values:   []string{"player4"},
-					Capacity: 100,
+					Capacity: 100, // Available Capacity == 99
 				},
 				"layers": {
 					Values:   []string{"layer4, layer5"},
-					Capacity: 100,
+					Capacity: 100, // Available Capacity == 98
 				}}}}
 	gs5 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs5", Namespace: defaultNs, UID: "5"},
 		Status: agonesv1.GameServerStatus{NodeName: "node1", State: agonesv1.GameServerStateReady,
 			Counters: map[string]agonesv1.CounterStatus{
 				"sessions": {
 					Count:    9,
-					Capacity: 1000,
+					Capacity: 1000, // Available Capacity == 991
 				},
 				"assets": {
 					Count:    99,
-					Capacity: 1000,
+					Capacity: 1000, // Available Capacity == 901
 				},
 			},
 			Lists: map[string]agonesv1.ListStatus{
 				"layers": {
 					Values:   []string{},
-					Capacity: 100,
+					Capacity: 100, // Available Capacity == 100
 				}}}}
 	gs6 := agonesv1.GameServer{ObjectMeta: metav1.ObjectMeta{Name: "gs6", Namespace: defaultNs, UID: "6"},
 		Status: agonesv1.GameServerStatus{NodeName: "node1", State: agonesv1.GameServerStateReady,
 			Counters: map[string]agonesv1.CounterStatus{
 				"sessions": {
 					Count:    999,
-					Capacity: 1000,
+					Capacity: 1000, // Available Capacity == 1
 				},
 			}}}
 
@@ -321,201 +307,171 @@ func TestAllocationCacheCompareGameServers(t *testing.T) {
 			list: []agonesv1.GameServer{gs4, gs5, gs6},
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "Counter",
-							Key:          "sessions",
-							Order:        "Ascending",
+							Type:  "Counter",
+							Key:   "sessions",
+							Order: "Ascending",
+						},
+					},
+				},
+			},
+			want: []*agonesv1.GameServer{&gs6, &gs4, &gs5},
+		},
+		"Sort by one Priority Counter Descending": {
+			list: []agonesv1.GameServer{gs4, gs5, gs6},
+			gsa: &allocationv1.GameServerAllocation{
+				Spec: allocationv1.GameServerAllocationSpec{
+					Priorities: []agonesv1.Priority{
+						{
+							Type:  "Counter",
+							Key:   "sessions",
+							Order: "Descending",
 						},
 					},
 				},
 			},
 			want: []*agonesv1.GameServer{&gs5, &gs4, &gs6},
 		},
-		"Sort by one Priority Counter Descending": {
-			list: []agonesv1.GameServer{gs4, gs5, gs6},
-			gsa: &allocationv1.GameServerAllocation{
-				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
-						{
-							PriorityType: "Counter",
-							Key:          "sessions",
-							Order:        "Descending",
-						},
-					},
-				},
-			},
-			want: []*agonesv1.GameServer{&gs6, &gs4, &gs5},
-		},
-		"Sort by one Priority Counter empty Order": {
-			list: []agonesv1.GameServer{gs5, gs6, gs4},
-			gsa: &allocationv1.GameServerAllocation{
-				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
-						{
-							PriorityType: "Counter",
-							Key:          "sessions",
-							Order:        "",
-						},
-					},
-				},
-			},
-			want: []*agonesv1.GameServer{&gs6, &gs4, &gs5},
-		},
 		"Sort by two Priority Counter Ascending and Ascending": {
 			list: []agonesv1.GameServer{gs3, gs5, gs6, gs4, gs1, gs2},
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "Counter",
-							Key:          "sessions",
-							Order:        "Ascending",
+							Type:  "Counter",
+							Key:   "sessions",
+							Order: "Ascending",
 						},
 						{
-							PriorityType: "Counter",
-							Key:          "assets",
-							Order:        "Ascending",
+							Type:  "Counter",
+							Key:   "assets",
+							Order: "Ascending",
 						},
 					},
 				},
 			},
-			want: []*agonesv1.GameServer{&gs5, &gs3, &gs4, &gs6, &gs2, &gs1},
+			want: []*agonesv1.GameServer{&gs6, &gs4, &gs3, &gs5, &gs2, &gs1},
 		},
 		"Sort by two Priority Counter Ascending and Descending": {
 			list: []agonesv1.GameServer{gs3, gs5, gs6, gs4, gs1, gs2},
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "Counter",
-							Key:          "sessions",
-							Order:        "Ascending",
+							Type:  "Counter",
+							Key:   "sessions",
+							Order: "Ascending",
 						},
 						{
-							PriorityType: "Counter",
-							Key:          "assets",
-							Order:        "Descending",
+							Type:  "Counter",
+							Key:   "assets",
+							Order: "Descending",
 						},
 					},
 				},
 			},
-			want: []*agonesv1.GameServer{&gs3, &gs5, &gs4, &gs6, &gs2, &gs1},
+			want: []*agonesv1.GameServer{&gs6, &gs4, &gs5, &gs3, &gs2, &gs1},
 		},
 		"Sort by one Priority Counter game server without Counter": {
 			list: []agonesv1.GameServer{gs1, gs5, gs6, gs4},
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "Counter",
-							Key:          "sessions",
-							Order:        "Ascending",
+							Type:  "Counter",
+							Key:   "sessions",
+							Order: "Ascending",
 						},
 					},
 				},
 			},
-			want: []*agonesv1.GameServer{&gs5, &gs4, &gs6, &gs1},
+			want: []*agonesv1.GameServer{&gs6, &gs4, &gs5, &gs1},
 		},
 		"Sort by one Priority List Ascending": {
 			list: []agonesv1.GameServer{gs3, gs2, gs1},
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "List",
-							Key:          "players",
-							Order:        "Ascending",
+							Type:  "List",
+							Key:   "players",
+							Order: "Ascending",
+						},
+					},
+				},
+			},
+			want: []*agonesv1.GameServer{&gs3, &gs1, &gs2},
+		},
+		"Sort by one Priority List Descending": {
+			list: []agonesv1.GameServer{gs3, gs2, gs1},
+			gsa: &allocationv1.GameServerAllocation{
+				Spec: allocationv1.GameServerAllocationSpec{
+					Priorities: []agonesv1.Priority{
+						{
+							Type:  "List",
+							Key:   "players",
+							Order: "Descending",
 						},
 					},
 				},
 			},
 			want: []*agonesv1.GameServer{&gs2, &gs1, &gs3},
 		},
-		"Sort by one Priority List Descending": {
-			list: []agonesv1.GameServer{gs3, gs2, gs1},
-			gsa: &allocationv1.GameServerAllocation{
-				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
-						{
-							PriorityType: "List",
-							Key:          "players",
-							Order:        "Descending",
-						},
-					},
-				},
-			},
-			want: []*agonesv1.GameServer{&gs3, &gs1, &gs2},
-		},
-		"Sort by one Priority List empty order": {
-			list: []agonesv1.GameServer{gs1, gs2, gs3},
-			gsa: &allocationv1.GameServerAllocation{
-				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
-						{
-							PriorityType: "List",
-							Key:          "players",
-							Order:        "",
-						},
-					},
-				},
-			},
-			want: []*agonesv1.GameServer{&gs3, &gs1, &gs2},
-		},
-		"Sort by one Priority List empty order game server without List": {
-			list: []agonesv1.GameServer{gs6, gs1, gs2, gs3},
-			gsa: &allocationv1.GameServerAllocation{
-				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
-						{
-							PriorityType: "List",
-							Key:          "players",
-							Order:        "",
-						},
-					},
-				},
-			},
-			want: []*agonesv1.GameServer{&gs3, &gs1, &gs2, &gs6},
-		},
 		"Sort by two Priority List Descending and Ascending": {
 			list: []agonesv1.GameServer{gs1, gs2, gs3, gs4},
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "List",
-							Key:          "players",
-							Order:        "Descending",
+							Type:  "List",
+							Key:   "players",
+							Order: "Descending",
 						},
 						{
-							PriorityType: "List",
-							Key:          "layers",
-							Order:        "Ascending",
+							Type:  "List",
+							Key:   "layers",
+							Order: "Ascending",
 						},
 					},
 				},
 			},
-			want: []*agonesv1.GameServer{&gs3, &gs4, &gs1, &gs2},
+			want: []*agonesv1.GameServer{&gs2, &gs1, &gs4, &gs3},
 		},
 		"Sort by two Priority List Descending and Descending": {
 			list: []agonesv1.GameServer{gs6, gs5, gs4, gs3, gs2, gs1},
 			gsa: &allocationv1.GameServerAllocation{
 				Spec: allocationv1.GameServerAllocationSpec{
-					Priorities: []allocationv1.Priority{
+					Priorities: []agonesv1.Priority{
 						{
-							PriorityType: "List",
-							Key:          "players",
-							Order:        "Descending",
+							Type:  "List",
+							Key:   "players",
+							Order: "Descending",
 						},
 						{
-							PriorityType: "List",
-							Key:          "layers",
-							Order:        "Descending",
+							Type:  "List",
+							Key:   "layers",
+							Order: "Descending",
 						},
 					},
 				},
 			},
-			want: []*agonesv1.GameServer{&gs3, &gs1, &gs4, &gs2, &gs5, &gs6},
+			want: []*agonesv1.GameServer{&gs2, &gs4, &gs1, &gs3, &gs5, &gs6},
+		},
+		"Sort lexigraphically as no game server has the priority": {
+			list: []agonesv1.GameServer{gs6, gs5, gs4, gs3, gs2, gs1},
+			gsa: &allocationv1.GameServerAllocation{
+				Spec: allocationv1.GameServerAllocationSpec{
+					Priorities: []agonesv1.Priority{
+						{
+							Type:  "Counter",
+							Key:   "sayers",
+							Order: "Ascending",
+						},
+					},
+				},
+			},
+			want: []*agonesv1.GameServer{&gs1, &gs2, &gs3, &gs4, &gs5, &gs6},
 		},
 	}
 
@@ -538,21 +494,15 @@ func TestAllocationCacheCompareGameServers(t *testing.T) {
 			err = cache.counter.Run(ctx, 0)
 			assert.Nil(t, err)
 
-			got := cache.ListSortedGameServers(testScenario.gsa)
+			got := cache.ListSortedGameServersPriorities(testScenario.gsa)
 
 			assert.Equal(t, testScenario.want, got)
 		})
 	}
 }
 
-func TestAllocatorRunCacheSyncFeatureStateAllocationFilter(t *testing.T) {
+func TestAllocatorRunCacheSync(t *testing.T) {
 	t.Parallel()
-
-	// TODO(markmandel): When this feature gets promoted to stable, replace test TestAllocatorRunCacheSync below with this test.
-	runtime.FeatureTestMutex.Lock()
-	defer runtime.FeatureTestMutex.Unlock()
-	require.NoError(t, runtime.ParseFeatures(string(runtime.FeatureStateAllocationFilter)+"=true"))
-
 	cache, m := newFakeAllocationCache()
 	gsWatch := watch.NewFake()
 
@@ -582,7 +532,7 @@ func TestAllocatorRunCacheSyncFeatureStateAllocationFilter(t *testing.T) {
 	}()
 
 	gs := agonesv1.GameServer{
-		ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: "default", ResourceVersion: "1"},
 		Status:     agonesv1.GameServerStatus{State: agonesv1.GameServerStateStarting},
 	}
 
@@ -592,33 +542,45 @@ func TestAllocatorRunCacheSyncFeatureStateAllocationFilter(t *testing.T) {
 	assertCacheEntries(0)
 
 	gs.Status.State = agonesv1.GameServerStateReady
+	gs.ObjectMeta.ResourceVersion = "2"
 	gsWatch.Modify(gs.DeepCopy())
 
 	assertCacheEntries(1)
 
 	// try again, should be no change
 	gs.Status.State = agonesv1.GameServerStateReady
+	gs.ObjectMeta.ResourceVersion = "3"
 	gsWatch.Modify(gs.DeepCopy())
 
 	assertCacheEntries(1)
 
 	// now move it to Shutdown
 	gs.Status.State = agonesv1.GameServerStateShutdown
+	gs.ObjectMeta.ResourceVersion = "4"
 	gsWatch.Modify(gs.DeepCopy())
 	assertCacheEntries(0)
 
 	// add it back in as Allocated
 	gs.Status.State = agonesv1.GameServerStateAllocated
+	gs.ObjectMeta.ResourceVersion = "5"
 	gsWatch.Modify(gs.DeepCopy())
 	assertCacheEntries(1)
 
 	// now move it to Shutdown
 	gs.Status.State = agonesv1.GameServerStateShutdown
+	gs.ObjectMeta.ResourceVersion = "6"
+	gsWatch.Modify(gs.DeepCopy())
+	assertCacheEntries(0)
+
+	// do not add back in with stale resource version
+	gs.Status.State = agonesv1.GameServerStateAllocated
+	gs.ObjectMeta.ResourceVersion = "6"
 	gsWatch.Modify(gs.DeepCopy())
 	assertCacheEntries(0)
 
 	// add back in ready gameserver
 	gs.Status.State = agonesv1.GameServerStateReady
+	gs.ObjectMeta.ResourceVersion = "7"
 	gsWatch.Modify(gs.DeepCopy())
 	assertCacheEntries(1)
 
@@ -626,91 +588,13 @@ func TestAllocatorRunCacheSyncFeatureStateAllocationFilter(t *testing.T) {
 	n := metav1.Now()
 	deletedCopy := gs.DeepCopy()
 	deletedCopy.ObjectMeta.DeletionTimestamp = &n
+	deletedCopy.ObjectMeta.ResourceVersion = "8"
 	gsWatch.Modify(deletedCopy)
 	assertCacheEntries(0)
 
 	// add back in ready gameserver
 	gs.Status.State = agonesv1.GameServerStateReady
-	gsWatch.Modify(gs.DeepCopy())
-	assertCacheEntries(1)
-
-	// now actually delete it
-	gsWatch.Delete(gs.DeepCopy())
-	assertCacheEntries(0)
-}
-
-func TestAllocatorRunCacheSync(t *testing.T) {
-	t.Parallel()
-
-	cache, m := newFakeAllocationCache()
-	gsWatch := watch.NewFake()
-
-	m.AgonesClient.AddWatchReactor("gameservers", k8stesting.DefaultWatchReactor(gsWatch, nil))
-
-	ctx, cancel := agtesting.StartInformers(m, cache.gameServerSynced)
-	defer cancel()
-
-	assertCacheEntries := func(expected int) {
-		count := 0
-		err := wait.PollImmediate(time.Second, 5*time.Second, func() (done bool, err error) {
-			count = 0
-			cache.cache.Range(func(key string, gs *agonesv1.GameServer) bool {
-				count++
-				return true
-			})
-
-			return count == expected, nil
-		})
-
-		assert.NoError(t, err, fmt.Sprintf("Should be %d values", expected))
-	}
-
-	go func() {
-		err := cache.Run(ctx)
-		assert.Nil(t, err)
-	}()
-
-	gs := agonesv1.GameServer{
-		ObjectMeta: metav1.ObjectMeta{Name: "gs1", Namespace: "default"},
-		Status:     agonesv1.GameServerStatus{State: agonesv1.GameServerStateStarting},
-	}
-
-	logrus.Info("adding ready game server")
-	gsWatch.Add(gs.DeepCopy())
-
-	assertCacheEntries(0)
-
-	gs.Status.State = agonesv1.GameServerStateReady
-	gsWatch.Modify(gs.DeepCopy())
-
-	assertCacheEntries(1)
-
-	// try again, should be no change
-	gs.Status.State = agonesv1.GameServerStateReady
-	gsWatch.Modify(gs.DeepCopy())
-
-	assertCacheEntries(1)
-
-	// now move it to Shutdown
-	gs.Status.State = agonesv1.GameServerStateShutdown
-	gsWatch.Modify(gs.DeepCopy())
-
-	assertCacheEntries(0)
-
-	// add back in ready gameserver
-	gs.Status.State = agonesv1.GameServerStateReady
-	gsWatch.Modify(gs.DeepCopy())
-	assertCacheEntries(1)
-
-	// update with deletion timestamp
-	n := metav1.Now()
-	deletedCopy := gs.DeepCopy()
-	deletedCopy.ObjectMeta.DeletionTimestamp = &n
-	gsWatch.Modify(deletedCopy)
-	assertCacheEntries(0)
-
-	// add back in ready gameserver
-	gs.Status.State = agonesv1.GameServerStateReady
+	deletedCopy.ObjectMeta.ResourceVersion = "9"
 	gsWatch.Modify(gs.DeepCopy())
 	assertCacheEntries(1)
 

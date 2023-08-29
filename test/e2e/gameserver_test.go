@@ -57,6 +57,7 @@ func TestCreateConnect(t *testing.T) {
 	assert.Equal(t, len(readyGs.Status.Ports), 1)
 	assert.NotEmpty(t, readyGs.Status.Ports[0].Port)
 	assert.NotEmpty(t, readyGs.Status.Address)
+	assert.NotEmpty(t, readyGs.Status.Addresses)
 	assert.NotEmpty(t, readyGs.Status.NodeName)
 	assert.Equal(t, readyGs.Status.State, agonesv1.GameServerStateReady)
 
@@ -507,7 +508,20 @@ func TestDevelopmentGameServerLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not get a GameServer ready: %v", err)
 	}
-	require.Equal(t, readyGs.Status.State, agonesv1.GameServerStateReady)
+	require.Equal(t, agonesv1.GameServerStateReady, readyGs.Status.State)
+
+	// Set dev GS into RequestReady and confirm it goes back to Ready.
+	gsCopy := readyGs.DeepCopy()
+	gsCopy.Status.State = agonesv1.GameServerStateRequestReady
+	reqReadyGs, err := framework.AgonesClient.AgonesV1().GameServers(framework.Namespace).Update(ctx, gsCopy, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	require.Equal(t, agonesv1.GameServerStateRequestReady, reqReadyGs.Status.State)
+
+	readyGs, err = framework.WaitForGameServerState(t, reqReadyGs, agonesv1.GameServerStateReady, framework.WaitForState)
+	if err != nil {
+		t.Fatalf("Could not get a GameServer ready from request ready: %v", err)
+	}
+	require.Equal(t, agonesv1.GameServerStateReady, readyGs.Status.State)
 
 	// confirm delete works, because if the finalisers don't get removed, this won't work.
 	err = framework.AgonesClient.AgonesV1().GameServers(framework.Namespace).Delete(ctx, readyGs.ObjectMeta.Name, metav1.DeleteOptions{})
@@ -982,7 +996,7 @@ spec:
           preferredDuringSchedulingIgnoredDuringExecution: ERROR
       containers:
         - name: simple-game-server
-          image: us-docker.pkg.dev/agones-images/examples/simple-game-server:0.16
+          image: us-docker.pkg.dev/agones-images/examples/simple-game-server:0.17
 `
 	err := os.WriteFile("/tmp/invalid.yaml", []byte(gsYaml), 0o644)
 	require.NoError(t, err)

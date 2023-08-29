@@ -340,6 +340,8 @@ func TestControllerSyncFleet(t *testing.T) {
 		gsSet := f.GameServerSet()
 		// make gsSet.Spec.Template and f.Spec.Template different in order to make 'rest' list not empty
 		gsSet.Spec.Template.Name = "qqqqqqqqqqqqqqqqqqq"
+		// make sure there is at least one replica, or the logic will escape before the check.
+		gsSet.Spec.Replicas = 1
 
 		m.AgonesClient.AddReactor("list", "fleets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, &agonesv1.FleetList{Items: []agonesv1.Fleet{*f}}, nil
@@ -905,11 +907,11 @@ func TestControllerApplyDeploymentStrategy(t *testing.T) {
 			},
 		},
 		string(appsv1.RollingUpdateDeploymentStrategyType): {
-			strategyType:         appsv1.RecreateDeploymentStrategyType,
+			strategyType:         appsv1.RollingUpdateDeploymentStrategyType,
 			gsSet1StatusReplicas: 10,
 			gsSet2StatusReplicas: 1,
 			expected: expected{
-				inactiveReplicas: 7,
+				inactiveReplicas: 8,
 				replicas:         2,
 			},
 		},
@@ -939,7 +941,7 @@ func TestControllerApplyDeploymentStrategy(t *testing.T) {
 				ua := action.(k8stesting.UpdateAction)
 				gsSet := ua.GetObject().(*agonesv1.GameServerSet)
 				assert.Equal(t, gsSet1.ObjectMeta.Name, gsSet.ObjectMeta.Name)
-				assert.Equal(t, int32(0), gsSet.Spec.Replicas)
+				assert.Equal(t, v.expected.inactiveReplicas, gsSet.Spec.Replicas)
 
 				return true, gsSet, nil
 			})
@@ -947,7 +949,7 @@ func TestControllerApplyDeploymentStrategy(t *testing.T) {
 			replicas, err := c.applyDeploymentStrategy(context.Background(), f, f.GameServerSet(), []*agonesv1.GameServerSet{gsSet1, gsSet2})
 			require.NoError(t, err)
 			assert.True(t, updated, "update should happen")
-			assert.Equal(t, f.Spec.Replicas, replicas)
+			assert.Equal(t, v.expected.replicas, replicas)
 		})
 	}
 
@@ -963,6 +965,22 @@ func TestControllerApplyDeploymentStrategy(t *testing.T) {
 		replicas, err := c.applyDeploymentStrategy(context.Background(), f, f.GameServerSet(), []*agonesv1.GameServerSet{})
 		require.NoError(t, err)
 		assert.Equal(t, f.Spec.Replicas, replicas)
+	})
+
+	t.Run("rest gameservers that are already scaled down", func(t *testing.T) {
+		f := defaultFixture()
+		f.Spec.Replicas = 10
+
+		gsSet1 := f.GameServerSet()
+		gsSet1.ObjectMeta.Name = "gsSet1"
+		gsSet1.Spec.Replicas = 0
+		gsSet1.Status.AllocatedReplicas = 1
+
+		c, _ := newFakeController()
+
+		replicas, err := c.applyDeploymentStrategy(context.Background(), f, f.GameServerSet(), []*agonesv1.GameServerSet{gsSet1})
+		require.NoError(t, err)
+		assert.Equal(t, int32(9), replicas)
 	})
 }
 
@@ -1062,6 +1080,40 @@ func TestControllerUpsertGameServerSet(t *testing.T) {
 		err := c.upsertGameServerSet(context.Background(), f, gsSet, replicas)
 		assert.Nil(t, err)
 		agtesting.AssertNoEvent(t, m.FakeRecorder.Events)
+	})
+
+	t.Run("update Priorities", func(t *testing.T) {
+		utilruntime.FeatureTestMutex.Lock()
+		defer utilruntime.FeatureTestMutex.Unlock()
+		require.NoError(t, utilruntime.ParseFeatures(string(utilruntime.FeatureCountsAndLists)+"=true"))
+
+		c, m := newFakeController()
+		// Default GameServerSet has no Priorities
+		gsSet := f.GameServerSet()
+		gsSet.ObjectMeta.UID = "1234"
+		// Add Priorities to the Fleet
+		f.Spec.Priorities = []agonesv1.Priority{
+			{
+				Type:  "List",
+				Key:   "Baz",
+				Order: "Ascending",
+			}}
+		update := false
+
+		m.AgonesClient.AddReactor("update", "gameserversets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			update = true
+			ca := action.(k8stesting.UpdateAction)
+			gsSet := ca.GetObject().(*agonesv1.GameServerSet)
+			assert.Equal(t, agonesv1.Priority{Type: "List", Key: "Baz", Order: "Ascending"}, gsSet.Spec.Priorities[0])
+			return true, gsSet, nil
+		})
+
+		// Update Priorities on the GameServerSet to match the Fleet
+		err := c.upsertGameServerSet(context.Background(), f, gsSet, gsSet.Spec.Replicas)
+		assert.Nil(t, err)
+
+		assert.True(t, update, "Should be updated")
+		agtesting.AssertEventContains(t, m.FakeRecorder.Events, "UpdatingGameServerSet")
 	})
 }
 

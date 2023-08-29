@@ -23,6 +23,7 @@ import (
 	"agones.dev/agones/pkg/util/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -163,15 +164,13 @@ func convertGameServerSelectorToInternalGameServerSelector(in *pb.GameServerSele
 		LabelSelector: metav1.LabelSelector{MatchLabels: in.GetMatchLabels()},
 	}
 
-	if runtime.FeatureEnabled(runtime.FeatureStateAllocationFilter) {
-		switch in.GameServerState {
-		case pb.GameServerSelector_ALLOCATED:
-			allocated := agonesv1.GameServerStateAllocated
-			result.GameServerState = &allocated
-		case pb.GameServerSelector_READY:
-			ready := agonesv1.GameServerStateReady
-			result.GameServerState = &ready
-		}
+	switch in.GameServerState {
+	case pb.GameServerSelector_ALLOCATED:
+		allocated := agonesv1.GameServerStateAllocated
+		result.GameServerState = &allocated
+	case pb.GameServerSelector_READY:
+		ready := agonesv1.GameServerStateReady
+		result.GameServerState = &ready
 	}
 
 	if runtime.FeatureEnabled(runtime.FeaturePlayerAllocationFilter) && in.Players != nil {
@@ -216,7 +215,7 @@ func convertInternalGameServerSelectorToGameServer(in *allocationv1.GameServerSe
 		MatchLabels: in.MatchLabels,
 	}
 
-	if runtime.FeatureEnabled(runtime.FeatureStateAllocationFilter) && in.GameServerState != nil {
+	if in.GameServerState != nil {
 		switch *in.GameServerState {
 		case agonesv1.GameServerStateReady:
 			result.GameServerState = pb.GameServerSelector_READY
@@ -299,6 +298,7 @@ func ConvertGSAToAllocationResponse(in *allocationv1.GameServerAllocation) (*pb.
 	return &pb.AllocationResponse{
 		GameServerName: in.Status.GameServerName,
 		Address:        in.Status.Address,
+		Addresses:      convertGSAAddressesToAllocationAddresses(in.Status.Addresses),
 		NodeName:       in.Status.NodeName,
 		Ports:          convertGSAAgonesPortsToAllocationPorts(in.Status.Ports),
 		Source:         in.Status.Source,
@@ -317,6 +317,7 @@ func ConvertAllocationResponseToGSA(in *pb.AllocationResponse, rs string) *alloc
 			State:          allocationv1.GameServerAllocationAllocated,
 			GameServerName: in.GameServerName,
 			Address:        in.Address,
+			Addresses:      convertAllocationAddressesToGSAAddresses(in.Addresses),
 			NodeName:       in.NodeName,
 			Ports:          convertAllocationPortsToGSAAgonesPorts(in.Ports),
 			Source:         rs,
@@ -326,6 +327,30 @@ func ConvertAllocationResponseToGSA(in *pb.AllocationResponse, rs string) *alloc
 	out.SetGroupVersionKind(allocationv1.SchemeGroupVersion.WithKind("GameServerAllocation"))
 
 	return out
+}
+
+// convertGSAAddressesToAllocationAddresses converts corev1.NodeAddress to AllocationResponse_GameServerStatusAddress
+func convertGSAAddressesToAllocationAddresses(in []corev1.NodeAddress) []*pb.AllocationResponse_GameServerStatusAddress {
+	var addresses []*pb.AllocationResponse_GameServerStatusAddress
+	for _, addr := range in {
+		addresses = append(addresses, &pb.AllocationResponse_GameServerStatusAddress{
+			Type:    string(addr.Type),
+			Address: addr.Address,
+		})
+	}
+	return addresses
+}
+
+// convertAllocationAddressesToGSAAddresses converts AllocationResponse_GameServerStatusAddress to corev1.NodeAddress
+func convertAllocationAddressesToGSAAddresses(in []*pb.AllocationResponse_GameServerStatusAddress) []corev1.NodeAddress {
+	var addresses []corev1.NodeAddress
+	for _, addr := range in {
+		addresses = append(addresses, corev1.NodeAddress{
+			Type:    corev1.NodeAddressType(addr.Type),
+			Address: addr.Address,
+		})
+	}
+	return addresses
 }
 
 // convertGSAAgonesPortsToAllocationPorts converts GameServerStatusPort V1 (GSA) to AllocationResponse_GameServerStatusPort
@@ -389,13 +414,27 @@ func convertStateV1ToError(in allocationv1.GameServerAllocationState) error {
 
 // convertAllocationPrioritiesToGSAPriorities converts a list of AllocationRequest_Priorities to a
 // list of GameServerAllocationSpec (GSA.Spec) Priorities
-func convertAllocationPrioritiesToGSAPriorities(in []*pb.Priority) []allocationv1.Priority {
-	var out []allocationv1.Priority
+func convertAllocationPrioritiesToGSAPriorities(in []*pb.Priority) []agonesv1.Priority {
+	var out []agonesv1.Priority
 	for _, p := range in {
-		priority := allocationv1.Priority{
-			PriorityType: p.PriorityType,
-			Key:          p.Key,
-			Order:        p.Order,
+		var t string
+		var o string
+		switch p.Type {
+		case pb.Priority_List:
+			t = agonesv1.GameServerPriorityList
+		default: // case pb.Priority_Counter and case nil
+			t = agonesv1.GameServerPriorityCounter
+		}
+		switch p.Order {
+		case pb.Priority_Descending:
+			o = agonesv1.GameServerPriorityDescending
+		default: // case pb.Priority_Ascending and case nil
+			o = agonesv1.GameServerPriorityAscending
+		}
+		priority := agonesv1.Priority{
+			Type:  t,
+			Key:   p.Key,
+			Order: o,
 		}
 		out = append(out, priority)
 	}
@@ -404,13 +443,27 @@ func convertAllocationPrioritiesToGSAPriorities(in []*pb.Priority) []allocationv
 
 // convertAllocationPrioritiesToGSAPriorities converts a list of GameServerAllocationSpec (GSA.Spec)
 // Priorities to a list of AllocationRequest_Priorities
-func convertGSAPrioritiesToAllocationPriorities(in []allocationv1.Priority) []*pb.Priority {
+func convertGSAPrioritiesToAllocationPriorities(in []agonesv1.Priority) []*pb.Priority {
 	var out []*pb.Priority
 	for _, p := range in {
+		var pt pb.Priority_Type
+		var po pb.Priority_Order
+		switch p.Type {
+		case agonesv1.GameServerPriorityList:
+			pt = pb.Priority_List
+		default: // case agonesv1.GameServerPriorityCounter and case nil
+			pt = pb.Priority_Counter
+		}
+		switch p.Order {
+		case agonesv1.GameServerPriorityDescending:
+			po = pb.Priority_Descending
+		default: // case agonesv1.GameServerPriorityAscending and case nil
+			po = pb.Priority_Ascending
+		}
 		priority := pb.Priority{
-			PriorityType: p.PriorityType,
-			Key:          p.Key,
-			Order:        p.Order,
+			Type:  pt,
+			Key:   p.Key,
+			Order: po,
 		}
 		out = append(out, &priority)
 	}

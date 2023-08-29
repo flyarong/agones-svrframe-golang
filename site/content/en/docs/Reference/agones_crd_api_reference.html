@@ -2669,14 +2669,6 @@ GameServerState
 </a>
 </em>
 </td>
-<td>
-<em>(Optional)</em>
-<p>[Stage:Beta]
-[FeatureFlag:StateAllocationFilter]
-GameServerState specifies which State is the filter to be used when attempting to retrieve a GameServer
-via Allocation. Defaults to &ldquo;Ready&rdquo;. The only other option is &ldquo;Allocated&rdquo;, which can be used in conjunction with
-label/annotation/player selectors to retrieve an already Allocated GameServer.</p>
-</td>
 </tr>
 <tr>
 <td>
@@ -4315,6 +4307,23 @@ agones.dev/agones/pkg/apis.SchedulingStrategy
 </tr>
 <tr>
 <td>
+<code>priorities</code></br>
+<em>
+<a href="#agones.dev/v1.Priority">
+[]Priority
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>(Alpha, CountsAndLists feature flag) The first Priority on the array of Priorities is the most
+important for sorting. The Fleetautoscaler will use the first priority for sorting GameServers
+by total Capacity in the Fleet and acts as a tie-breaker after sorting the game servers by
+State and Strategy. Impacts scale down logic.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>template</code></br>
 <em>
 <a href="#agones.dev/v1.GameServerTemplateSpec">
@@ -4650,6 +4659,23 @@ agones.dev/agones/pkg/apis.SchedulingStrategy
 </tr>
 <tr>
 <td>
+<code>priorities</code></br>
+<em>
+<a href="#agones.dev/v1.Priority">
+[]Priority
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>(Alpha, CountsAndLists feature flag) The first Priority on the array of Priorities is the most
+important for sorting. The Fleetautoscaler will use the first priority for sorting GameServers
+by total Capacity in the Fleet and acts as a tie-breaker after sorting the game servers by
+State and Strategy. Impacts scale down logic.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>template</code></br>
 <em>
 <a href="#agones.dev/v1.GameServerTemplateSpec">
@@ -4686,7 +4712,7 @@ GameServerSetStatus
 <a href="#agones.dev/v1.GameServerSetStatus">GameServerSetStatus</a>)
 </p>
 <p>
-<p>AggregatedCounterStatus stores total Counter tracking values</p>
+<p>AggregatedCounterStatus stores total and allocated Counter tracking values</p>
 </p>
 <table>
 <thead>
@@ -4696,6 +4722,26 @@ GameServerSetStatus
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+<code>allocatedCount</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>allocatedCapacity</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+</td>
+</tr>
 <tr>
 <td>
 <code>count</code></br>
@@ -4726,7 +4772,7 @@ int64
 <a href="#agones.dev/v1.GameServerSetStatus">GameServerSetStatus</a>)
 </p>
 <p>
-<p>AggregatedListStatus stores total List tracking values</p>
+<p>AggregatedListStatus stores total and allocated List tracking values</p>
 </p>
 <table>
 <thead>
@@ -4736,6 +4782,26 @@ int64
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>
+<code>allocatedCount</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>allocatedCapacity</code></br>
+<em>
+int64
+</em>
+</td>
+<td>
+</td>
+</tr>
 <tr>
 <td>
 <code>count</code></br>
@@ -4996,6 +5062,23 @@ agones.dev/agones/pkg/apis.SchedulingStrategy
 </td>
 <td>
 <p>Scheduling strategy. Defaults to &ldquo;Packed&rdquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>priorities</code></br>
+<em>
+<a href="#agones.dev/v1.Priority">
+[]Priority
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>(Alpha, CountsAndLists feature flag) The first Priority on the array of Priorities is the most
+important for sorting. The Fleetautoscaler will use the first priority for sorting GameServers
+by total Capacity in the Fleet and acts as a tie-breaker after sorting the game servers by
+State and Strategy. Impacts scale down logic.</p>
 </td>
 </tr>
 <tr>
@@ -5273,6 +5356,23 @@ agones.dev/agones/pkg/apis.SchedulingStrategy
 </td>
 <td>
 <p>Scheduling strategy. Defaults to &ldquo;Packed&rdquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>priorities</code></br>
+<em>
+<a href="#agones.dev/v1.Priority">
+[]Priority
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>(Alpha, CountsAndLists feature flag) The first Priority on the array of Priorities is the most
+important for sorting. The Fleetautoscaler will use the first priority for sorting GameServers
+by total Capacity in the Fleet and acts as a tie-breaker after sorting the game servers by
+State and Strategy. Impacts scale down logic.</p>
 </td>
 </tr>
 <tr>
@@ -5619,6 +5719,20 @@ string
 </em>
 </td>
 <td>
+</td>
+</tr>
+<tr>
+<td>
+<code>addresses</code></br>
+<em>
+<a href="https://v1-26.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#nodeaddress-v1-core">
+[]Kubernetes core/v1.NodeAddress
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Addresses is the array of addresses at which the GameServer can be reached; copy of Node.Status.addresses.</p>
 </td>
 </tr>
 <tr>
@@ -6111,6 +6225,61 @@ int64
 <p>
 <p>PortPolicy is the port policy for the GameServer</p>
 </p>
+<h3 id="agones.dev/v1.Priority">Priority
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#agones.dev/v1.FleetSpec">FleetSpec</a>, 
+<a href="#allocation.agones.dev/v1.GameServerAllocationSpec">GameServerAllocationSpec</a>, 
+<a href="#agones.dev/v1.GameServerSetSpec">GameServerSetSpec</a>)
+</p>
+<p>
+<p>Priority is a sorting option for GameServers with Counters or Lists based on the Capacity.
+Type: Sort by a &ldquo;Counter&rdquo; or a &ldquo;List&rdquo;.
+Key: The name of the Counter or List. If not found on the GameServer, has no impact.
+Order: Sort by &ldquo;Ascending&rdquo; or &ldquo;Descending&rdquo;. &ldquo;Descending&rdquo; a bigger Capacity is preferred.
+&ldquo;Ascending&rdquo; would be smaller Capacity is preferred.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>key</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>order</code></br>
+<em>
+string
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="agones.dev/v1.SdkServer">SdkServer
 </h3>
 <p>
@@ -6292,7 +6461,7 @@ This is useful for things like smoke testing of new game servers.</p>
 <td>
 <code>priorities</code></br>
 <em>
-<a href="#allocation.agones.dev/v1.Priority">
+<a href="#agones.dev/v1.Priority">
 []Priority
 </a>
 </em>
@@ -6300,9 +6469,9 @@ This is useful for things like smoke testing of new game servers.</p>
 <td>
 <em>(Optional)</em>
 <p>(Alpha, CountsAndLists feature flag) The first Priority on the array of Priorities is the most
-important for sorting. The allocator will use the first priority for sorting GameServers in the
-Selector set, and will only use any following priority for tie-breaking during sort.
-Impacts which GameServer is checked first.</p>
+important for sorting. The allocator will use the first priority for sorting GameServers by
+available Capacity in the Selector set. Acts as a tie-breaker after sorting the game servers
+by State and Strategy Packed. Impacts which GameServer is checked first.</p>
 </td>
 </tr>
 <tr>
@@ -6570,7 +6739,7 @@ This is useful for things like smoke testing of new game servers.</p>
 <td>
 <code>priorities</code></br>
 <em>
-<a href="#allocation.agones.dev/v1.Priority">
+<a href="#agones.dev/v1.Priority">
 []Priority
 </a>
 </em>
@@ -6578,9 +6747,9 @@ This is useful for things like smoke testing of new game servers.</p>
 <td>
 <em>(Optional)</em>
 <p>(Alpha, CountsAndLists feature flag) The first Priority on the array of Priorities is the most
-important for sorting. The allocator will use the first priority for sorting GameServers in the
-Selector set, and will only use any following priority for tie-breaking during sort.
-Impacts which GameServer is checked first.</p>
+important for sorting. The allocator will use the first priority for sorting GameServers by
+available Capacity in the Selector set. Acts as a tie-breaker after sorting the game servers
+by State and Strategy Packed. Impacts which GameServer is checked first.</p>
 </td>
 </tr>
 <tr>
@@ -6726,6 +6895,18 @@ string
 </tr>
 <tr>
 <td>
+<code>addresses</code></br>
+<em>
+<a href="https://v1-26.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#nodeaddress-v1-core">
+[]Kubernetes core/v1.NodeAddress
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
 <code>nodeName</code></br>
 <em>
 string
@@ -6843,10 +7024,7 @@ GameServerState
 </em>
 </td>
 <td>
-<em>(Optional)</em>
-<p>[Stage:Beta]
-[FeatureFlag:StateAllocationFilter]
-GameServerState specifies which State is the filter to be used when attempting to retrieve a GameServer
+<p>GameServerState specifies which State is the filter to be used when attempting to retrieve a GameServer
 via Allocation. Defaults to &ldquo;Ready&rdquo;. The only other option is &ldquo;Allocated&rdquo;, which can be used in conjunction with
 label/annotation/player selectors to retrieve an already Allocated GameServer.</p>
 </td>
@@ -7114,60 +7292,6 @@ int64
 </tr>
 </tbody>
 </table>
-<h3 id="allocation.agones.dev/v1.Priority">Priority
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#allocation.agones.dev/v1.GameServerAllocationSpec">GameServerAllocationSpec</a>)
-</p>
-<p>
-<p>Priority is a sorting option for GameServers with Counters or Lists based on the count or
-number of items in a List.
-PriorityType: Sort by a &ldquo;Counter&rdquo; or a &ldquo;List&rdquo;.
-Key: The name of the Counter or List. If not found on the GameServer, has no impact.
-Order: Sort by &ldquo;Ascending&rdquo; or &ldquo;Descending&rdquo;. Default is &ldquo;Descending&rdquo; so bigger count is preferred.
-&ldquo;Ascending&rdquo; would be smaller count is preferred.</p>
-</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>priorityType</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>key</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-</td>
-</tr>
-<tr>
-<td>
-<code>order</code></br>
-<em>
-string
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
 <hr/>
 <h2 id="autoscaling.agones.dev/v1">autoscaling.agones.dev/v1</h2>
 <p>
@@ -7402,7 +7526,7 @@ int64
 <td>
 <p>MinCapacity is the minimum aggregate Counter total capacity across the fleet.
 If zero, MinCapacity is ignored.
-If non zero, MinCapacity must be smaller than MaxCapacity and bigger than BufferSize</p>
+If non zero, MinCapacity must be smaller than MaxCapacity and bigger than BufferSize.</p>
 </td>
 </tr>
 <tr>
@@ -7912,7 +8036,7 @@ FixedIntervalSync
 <a href="#autoscaling.agones.dev/v1.FleetAutoscalerPolicy">FleetAutoscalerPolicy</a>)
 </p>
 <p>
-<p>ListPolicy controls the desired behavior of the list autoscaler policy.</p>
+<p>ListPolicy controls the desired behavior of the List autoscaler policy.</p>
 </p>
 <table>
 <thead>
@@ -7955,7 +8079,7 @@ int64
 <td>
 <p>MinCapacity is the minimum aggregate List total capacity across the fleet.
 If zero, it is ignored.
-If non zero, it must be smaller than MaxCapacity and bigger than BufferSize</p>
+If non zero, it must be smaller than MaxCapacity and bigger than BufferSize.</p>
 </td>
 </tr>
 <tr>
@@ -7966,8 +8090,8 @@ k8s.io/apimachinery/pkg/util/intstr.IntOrString
 </em>
 </td>
 <td>
-<p>BufferSize is the size of a buffer based on the list capacity that is available over the
-current aggregate list length in the Fleet (available capacity). It can be specified either
+<p>BufferSize is the size of a buffer based on the List capacity that is available over the
+current aggregate List length in the Fleet (available capacity). It can be specified either
 as an absolute value (i.e. 5) or percentage format (i.e. 5%).
 Must be bigger than 0. Required field.</p>
 </td>

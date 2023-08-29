@@ -36,7 +36,7 @@ and copy it into a release issue. Fill in relevant values, found inside {}
   - [ ] In `site/content/en/docs/Installation/_index.md #agones-and-kubernetes-supported-versions`, for the current version, replace `{{% k8s-version %}}` with hardcoded Kubernetes versions supported by the current version. And add a row for the Agones release version with `{{% k8s-version %}}` as its supported Kubernetes versions.
   - [ ] Run `make del-data-proofer-ignore FILENAME={version}-1.md` to remove `data-proofer-ignore` attribute from previous release blog. Review all occurrences of the link_test and data-proofer-ignore attributes globally. Exclude html and release files.
   - [ ] Run `make feature-shortcode-update version={version}` to remove all instances of the `feature expiryVersion` shortcode, including the associated content, while preserving the rest of the content within the .md files located in site/content/en/docs. Additionally, ensure that only the block of `feature publishVersion` is removed without affecting the content.
-  - [ ] Add a link to previous version's documentation to nav dropdown in `site/layouts/partials/navbar.html`
+  - [ ] Add a link to previous version's documentation to nav dropdown in `site/layouts/partials/navbar.html` on top and Run `make update-navbar-version FILENAME=site/layouts/partials/navbar.html` to remove the older version from the dropdown list.
   - [ ] config.toml updates:
     - [ ] Run `make site-config-update-version` to update the release version and sync data between dev and prod.
     - [ ] Update documentation with updated example images tags.
@@ -58,14 +58,17 @@ and copy it into a release issue. Fill in relevant values, found inside {}
 - [ ] Copy any review changes from the release blog post into the draft GitHub release.
 - [ ] Publish the draft GitHub Release.
 - [ ] Run `make release-branch` to create a release branch and run `gcloud config configurations activate <your development project>` to switch Agones development tooling off of the `agones-images` project.
-- [ ] Email mailing lists with the release details (copy-paste the release blog post). Refer to the [Internal Mailing list posting guide](go/agones-release-guide) for details. 
+- [ ] Email mailing lists with the release details (copy-paste the release blog post). Refer to the [Internal Mailing list posting guide][Internal Mailing list posting guide] for details. 
 - [ ] Paste the announcement blog post to the #users Slack group.
 - [ ] Post to the [agonesdev](https://twitter.com/agonesdev) Twitter account.
 - [ ] Run `git checkout main`.
 - [ ] Run `make sdk-update-version release_stage=after version={version}` file. This command will update the version number in the sdks/install files to {version}+1-dev.
+- [ ] Run `make sdks-rust-cargo-version-update`. Commit the changes in a feature branch called `prep/{version}+1`. 
+- [ ] Run `make sdk-publish-rust`. This command executes `cargo login` for authentication, performs a dry-run publish, and if that succeeds, does the actual publish. Will need [crate's API TOKEN](https://crates.io/settings/tokens) from your crate's account.
 - [ ] Create PR with these changes, and merge them with approval
 - [ ] Close this issue. _Congratulations!_ - the release is now complete! :tada: :clap: :smile: :+1:
 
 [release-template]: https://github.com/googleforgames/agones/blob/main/docs/governance/templates/release.md
 [release-draft]: https://github.com/googleforgames/agones/releases
 [build-makefile]: https://github.com/googleforgames/agones/blob/main/build/Makefile
+[Internal Mailing list posting guide]: https://docs.google.com/document/d/1qYR9ccVURgujqFAIpjpSN2GRcCeQ29ow5H_V4sm4RGs/edit#heading=h.zge9gjrt8ws8

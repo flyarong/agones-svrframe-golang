@@ -20,12 +20,12 @@ import (
 	"crypto/x509"
 	goErrors "errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
 	"agones.dev/agones/pkg/allocation/converters"
 	pb "agones.dev/agones/pkg/allocation/go"
+	"agones.dev/agones/pkg/apis"
 	agonesv1 "agones.dev/agones/pkg/apis/agones/v1"
 	allocationv1 "agones.dev/agones/pkg/apis/allocation/v1"
 	multiclusterv1 "agones.dev/agones/pkg/apis/multicluster/v1"
@@ -48,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	runtimeschema "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	informercorev1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -199,26 +200,20 @@ func (c *Allocator) Allocate(ctx context.Context, gsa *allocationv1.GameServerAl
 	latency.setRequest(gsa)
 
 	// server side validation
-	if causes, ok := gsa.Validate(); !ok {
-		s := &metav1.Status{
-			Status:  metav1.StatusFailure,
-			Message: fmt.Sprintf("GameServerAllocation is invalid: Invalid value: %#v", gsa),
-			Reason:  metav1.StatusReasonInvalid,
-			Details: &metav1.StatusDetails{
-				Kind:   "GameServerAllocation",
-				Group:  allocationv1.SchemeGroupVersion.Group,
-				Causes: causes,
-			},
-			Code: http.StatusUnprocessableEntity,
+	if errs := gsa.Validate(); len(errs) > 0 {
+		kind := runtimeschema.GroupKind{
+			Group: allocationv1.SchemeGroupVersion.Group,
+			Kind:  "GameServerAllocation",
 		}
-
+		statusErr := k8serrors.NewInvalid(kind, gsa.Name, errs)
+		s := &statusErr.ErrStatus
 		var gvks []schema.GroupVersionKind
 		gvks, _, err := apiserver.Scheme.ObjectKinds(s)
 		if err != nil {
 			return nil, errors.Wrap(err, "could not find objectkinds for status")
 		}
-		c.loggerForGameServerAllocation(gsa).Debug("GameServerAllocation is invalid")
 
+		c.loggerForGameServerAllocation(gsa).Debug("GameServerAllocation is invalid")
 		s.TypeMeta = metav1.TypeMeta{Kind: gvks[0].Kind, APIVersion: gvks[0].Version}
 		return s, nil
 	}
@@ -282,6 +277,7 @@ func (c *Allocator) allocateFromLocalCluster(ctx context.Context, gsa *allocatio
 		gsa.Status.GameServerName = gs.ObjectMeta.Name
 		gsa.Status.Ports = gs.Status.Ports
 		gsa.Status.Address = gs.Status.Address
+		gsa.Status.Addresses = append(gsa.Status.Addresses, gs.Status.Addresses...)
 		gsa.Status.NodeName = gs.Status.NodeName
 		gsa.Status.Source = localAllocationSource
 		gsa.Status.Metadata = &allocationv1.GameServerMetadata{
@@ -502,20 +498,47 @@ func (c *Allocator) ListenAndAllocate(ctx context.Context, updateWorkerCount int
 	// continued.
 
 	var list []*agonesv1.GameServer
+	var sortKey uint64
 	requestCount := 0
 
 	for {
 		select {
 		case req := <-c.pendingRequests:
 			// refresh the list after every 100 allocations made in a single batch
-			requestCount++
 			if requestCount >= maxBatchBeforeRefresh {
 				list = nil
 				requestCount = 0
 			}
 
+			if runtime.FeatureEnabled(runtime.FeatureCountsAndLists) {
+				// SortKey returns the sorting values (list of Priorities) as a determinstic key.
+				// In case gsa.Spec.Priorities is nil this will still return a sortKey.
+				// In case of error this will return 0 for the sortKey.
+				newSortKey, err := req.gsa.SortKey()
+				if err != nil {
+					c.baseLogger.WithError(err).Warn("error getting sortKey for GameServerAllocationSpec", err)
+				}
+				// Set sortKey if this is the first request, or the previous request errored on creating a sortKey.
+				if sortKey == uint64(0) {
+					sortKey = newSortKey
+				}
+
+				if newSortKey != sortKey {
+					sortKey = newSortKey
+					list = nil
+					requestCount = 0
+				}
+			}
+
+			requestCount++
+
 			if list == nil {
-				list = c.allocationCache.ListSortedGameServers(req.gsa)
+				if !runtime.FeatureEnabled(runtime.FeatureCountsAndLists) || req.gsa.Spec.Scheduling == apis.Packed {
+					list = c.allocationCache.ListSortedGameServers(req.gsa)
+				} else {
+					// If FeatureCountsAndLists and Scheduling == Distributed, sort game servers by Priorities
+					list = c.allocationCache.ListSortedGameServersPriorities(req.gsa)
+				}
 			}
 
 			gs, index, err := findGameServerForAllocation(req.gsa, list)

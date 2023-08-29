@@ -150,11 +150,13 @@ run-sdk-conformance-no-build: ensure-build-sdk-image
 run-sdk-conformance-test: TRIES=5
 run-sdk-conformance-test: ensure-agones-sdk-image
 run-sdk-conformance-test: ensure-build-sdk-image
+	@echo "\n\n^^^ Building: $(SDK_FOLDER)\n\n"
 	$(MAKE) run-sdk-command COMMAND=build-sdk-test
-	for try in `seq 1 $(TRIES)`; do \
-	  $(MAKE) run-sdk-conformance-no-build && echo "+++ Success: $(SDK_FOLDER)" && break || \
-	    status=$$? && echo "*** Failure: $(SDK_FOLDER), try $$try/$(TRIES)"; \
-	done; (exit $$status)
+	@for try in `seq 1 $(TRIES)`; do \
+	  echo "\n\n>>> Starting: ($$try/$(TRIES)) $(SDK_FOLDER)\n\n" && \
+	  $(MAKE) run-sdk-conformance-no-build && echo "\n\n+++ Success: ($$try/$(TRIES)) $(SDK_FOLDER)\n\n" && break || \
+	    echo "\n\n*** Failure: ($$try/$(TRIES)) $(SDK_FOLDER)\n\n" && false; \
+	done
 
 run-sdk-conformance-test-cpp:
 	$(MAKE) run-sdk-conformance-test SDK_FOLDER=cpp GRPC_PORT=9003 HTTP_PORT=9103
@@ -166,7 +168,7 @@ run-sdk-conformance-test-go:
 	# run without feature flags
 	$(MAKE) run-sdk-conformance-test SDK_FOLDER=go GRPC_PORT=9001 HTTP_PORT=9101
 	# run with feature flags enabled
-	$(MAKE) run-sdk-conformance-no-build SDK_FOLDER=go GRPC_PORT=9001 HTTP_PORT=9101 FEATURE_GATES=PlayerTracking=true TESTS=$(DEFAULT_CONFORMANCE_TESTS),$(ALPHA_CONFORMANCE_TESTS)
+	$(MAKE) run-sdk-conformance-test SDK_FOLDER=go GRPC_PORT=9001 HTTP_PORT=9101 FEATURE_GATES=PlayerTracking=true TESTS=$(DEFAULT_CONFORMANCE_TESTS),$(ALPHA_CONFORMANCE_TESTS)
 
 run-sdk-conformance-test-rust:
 	# run without feature flags
@@ -179,10 +181,11 @@ run-sdk-conformance-test-rust:
 	DOCKER_RUN_ARGS="$(DOCKER_RUN_ARGS) -e RUN_ASYNC=true" $(MAKE) run-sdk-conformance-test SDK_FOLDER=rust GRPC_PORT=9004 HTTP_PORT=9104 FEATURE_GATES=PlayerTracking=true TESTS=$(DEFAULT_CONFORMANCE_TESTS),$(ALPHA_CONFORMANCE_TESTS)
 
 run-sdk-conformance-test-rest:
+	# (note: the restapi folder doesn't use GRPC_PORT but run-sdk-conformance-no-build defaults it, so we supply a unique value here)
 	# run without feature flags
-	$(MAKE) run-sdk-conformance-test SDK_FOLDER=restapi HTTP_PORT=9050
+	$(MAKE) run-sdk-conformance-test SDK_FOLDER=restapi GRPC_PORT=9050 HTTP_PORT=9150
 	# run with feature flags enabled
-	$(MAKE) run-sdk-conformance-no-build SDK_FOLDER=restapi GRPC_PORT=9001 HTTP_PORT=9101 FEATURE_GATES=PlayerTracking=true TESTS=$(DEFAULT_CONFORMANCE_TESTS),$(ALPHA_CONFORMANCE_TESTS)
+	$(MAKE) run-sdk-conformance-test SDK_FOLDER=restapi GRPC_PORT=9050 HTTP_PORT=9150 FEATURE_GATES=PlayerTracking=true TESTS=$(DEFAULT_CONFORMANCE_TESTS),$(ALPHA_CONFORMANCE_TESTS)
 
 	$(MAKE) run-sdk-command COMMAND=clean SDK_FOLDER=restapi
 
@@ -213,3 +216,27 @@ sdk-shell-csharp:
 sdk-publish-csharp: RELEASE_VERSION ?= $(base_version)
 sdk-publish-csharp:
 	$(MAKE) run-sdk-command-csharp COMMAND=publish VERSION=$(RELEASE_VERSION) DOCKER_RUN_ARGS="$(DOCKER_RUN_ARGS) -it"
+
+# SDK shell for rust 
+sdk-shell-rust: 
+	$(MAKE) sdk-shell SDK_FOLDER=rust 
+
+# Publish the Rust SDK to crates.io
+sdk-publish-rust:
+	$(MAKE) run-sdk-command-rust VERSION=$(RELEASE_VERSION) DOCKER_RUN_ARGS="$(DOCKER_RUN_ARGS) -it" COMMAND=publish
+
+# difference in sdks before and after gen-all-sdk-grpc target
+test-gen-all-sdk-grpc:
+	make gen-all-sdk-grpc
+	@echo; \
+	echo "=== Diffing workspace after 'make gen-all-sdk-grpc'"; \
+	diff_output=$$(git diff --name-status HEAD -- ../sdks); \
+	diff_output_test_sdk=$$(git diff --name-status HEAD -- ../test/sdk); \
+	if [ -z "$$diff_output" ] && [ -z "$$diff_output_test_sdk" ]; then \
+		echo "+++ Success: No differences found."; \
+	else \
+		echo "*** Failure: Differences found:"; \
+		echo "$$diff_output"; \
+		echo "$$diff_output_test_sdk"; \
+		exit 1; \
+	fi

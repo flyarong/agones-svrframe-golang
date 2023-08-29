@@ -36,8 +36,6 @@ spec:
         game: my-game
       matchExpressions:
         - {key: tier, operator: In, values: [cache]}
-      # [Stage:Beta]
-      # [FeatureFlag:StateAllocationFilter]
       # Specifies which State is the filter to be used when attempting to retrieve a GameServer
       # via Allocation. Defaults to "Ready". The only other option is "Allocated", which can be used in conjunction with
       # label/annotation/player selectors to retrieve an already Allocated GameServer.
@@ -79,8 +77,6 @@ spec:
       game: my-game
     matchExpressions:
       - {key: tier, operator: In, values: [cache]}
-    # [Stage:Beta]
-    # [FeatureFlag:StateAllocationFilter]
     # Specifies which State is the filter to be used when attempting to retrieve a GameServer
     # via Allocation. Defaults to "Ready". The only other option is "Allocated", which can be used in conjunction with
     # label/annotation/player selectors to retrieve an already Allocated GameServer.
@@ -124,7 +120,7 @@ spec:
     annotations:
       map:  garden22
   {{< /tab >}}
-{{< /tabpane >}}
+{{< /tabpane >}}  
 
 The `spec` field is the actual `GameServerAllocation` specification, and it is composed as follows:
 
@@ -153,7 +149,8 @@ Once created the `GameServerAllocation` will have a `status` field consisting of
 - `State` is the current state of a GameServerAllocation, e.g. `Allocated`, or `UnAllocated`
 - `GameServerName` is the name of the game server attached to this allocation, once the `state` is `Allocated`
 - `Ports` is a list of the ports that the game server makes available. See [the GameServer Reference]({{< ref "/docs/Reference/gameserver.md" >}}) for more details.
-- `Address` is the network address where the game server can be reached.
+- `Address` is the primary network address where the game server can be reached.
+- `Addresses` is an array of all network addresses where the game server can be reached. It is a copy of the [`Node.Status.addresses`][addresses] field for the node the `GameServer` is scheduled on.
 - `NodeName` is the name of the node that the gameserver is running on.
 - `Source` is "local" unless this allocation is from a remote cluster, in which case `Source` is the endpoint of the remote agones-allocator. See [Multi-cluster Allocation]({{< ref "/docs/Advanced/multi-cluster-allocation.md" >}}) for more details.
 - `Metadata` conststs of:
@@ -182,3 +179,8 @@ when using an API call. If not specified when using the command line, the [names
 
 [gameserverselector]: {{% ref "/docs/Reference/agones_crd_api_reference.html#allocation.agones.dev/v1.GameServerSelector"  %}}
 [namespace]: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces
+[addresses]: https://v1-26.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.26/#nodeaddress-v1-core
+
+## Next Steps:
+
+- Check out the [Allocator Service]({{< ref "/docs/Advanced/allocator-service.md" >}}) as a richer alternative to `GameServerAllocation`.

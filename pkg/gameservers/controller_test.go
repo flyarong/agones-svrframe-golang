@@ -120,6 +120,7 @@ func TestControllerSyncGameServer(t *testing.T) {
 			assert.Equal(t, expectedState, gs.Status.State)
 			if expectedState == agonesv1.GameServerStateScheduled {
 				assert.Equal(t, ipFixture, gs.Status.Address)
+				assert.Equal(t, []corev1.NodeAddress{{Address: ipFixture, Type: "ExternalIP"}}, gs.Status.Addresses)
 				assert.NotEmpty(t, gs.Status.Ports[0].Port)
 			}
 
@@ -208,6 +209,7 @@ func TestControllerSyncGameServerWithDevIP(t *testing.T) {
 
 			assert.Equal(t, expectedState, gs.Status.State)
 			assert.Equal(t, ipFixture, gs.Status.Address)
+			assert.Equal(t, []corev1.NodeAddress{{Address: ipFixture, Type: "InternalIP"}}, gs.Status.Addresses)
 			assert.NotEmpty(t, gs.Status.Ports[0].Port)
 
 			return true, gs, nil
@@ -221,6 +223,40 @@ func TestControllerSyncGameServerWithDevIP(t *testing.T) {
 
 		err = c.syncGameServer(ctx, "default/test")
 		assert.Nil(t, err)
+		assert.Equal(t, 1, updateCount, "update reactor should fire once")
+	})
+
+	t.Run("GameServer with ReadyRequest State", func(t *testing.T) {
+		c, mocks := newFakeController()
+
+		updateCount := 0
+
+		gsFixture := templateDevGs.DeepCopy()
+		gsFixture.ApplyDefaults()
+		gsFixture.Status.State = agonesv1.GameServerStateRequestReady
+
+		mocks.AgonesClient.AddReactor("list", "gameservers", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			gameServers := &agonesv1.GameServerList{Items: []agonesv1.GameServer{*gsFixture}}
+			return true, gameServers, nil
+		})
+		mocks.AgonesClient.AddReactor("update", "gameservers", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			ua := action.(k8stesting.UpdateAction)
+			gs := ua.GetObject().(*agonesv1.GameServer)
+			updateCount++
+
+			assert.Equal(t, agonesv1.GameServerStateReady, gs.Status.State)
+
+			return true, gs, nil
+		})
+
+		ctx, cancel := agtesting.StartInformers(mocks, c.gameServerSynced)
+		defer cancel()
+
+		err := c.portAllocator.Run(ctx)
+		assert.NoError(t, err, "should not error")
+
+		err = c.syncGameServer(ctx, "default/test")
+		assert.NoError(t, err, "should not error")
 		assert.Equal(t, 1, updateCount, "update reactor should fire once")
 	})
 
@@ -952,6 +988,7 @@ func TestControllerSyncGameServerStartingState(t *testing.T) {
 		assert.True(t, gsUpdated)
 		assert.Equal(t, gs.Status.NodeName, node.ObjectMeta.Name)
 		assert.Equal(t, gs.Status.Address, ipFixture)
+		assert.Equal(t, []corev1.NodeAddress{{Address: ipFixture, Type: "ExternalIP"}}, gs.Status.Addresses)
 
 		agtesting.AssertEventContains(t, m.FakeRecorder.Events, "Address and port populated")
 		assert.NotEmpty(t, gs.Status.Ports)
@@ -1391,6 +1428,7 @@ func TestControllerSyncGameServerRequestReadyState(t *testing.T) {
 
 		assert.Equal(t, gs.Status.NodeName, nodeFixture.ObjectMeta.Name)
 		assert.Equal(t, gs.Status.Address, ipFixture)
+		assert.Equal(t, []corev1.NodeAddress{{Address: ipFixture, Type: "ExternalIP"}}, gs.Status.Addresses)
 
 		agtesting.AssertEventContains(t, m.FakeRecorder.Events, "Address and port populated")
 		agtesting.AssertEventContains(t, m.FakeRecorder.Events, "SDK.Ready() complete")

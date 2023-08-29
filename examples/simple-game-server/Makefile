@@ -23,7 +23,8 @@
 #     \_/ \__,_|_|  |_|\__,_|_.__/|_|\___|___/
 #
 
-REGISTRY = us-docker.pkg.dev/agones-images/examples
+REPOSITORY ?=
+PROD_REPO ?= us-docker.pkg.dev/agones-images/examples
 BUILDX_WINDOWS_BUILDER = windows-builder
 # Versions of Windows Server to support, default is Windows Server 2019.
 # For the full list of tags see https://hub.docker.com/_/microsoft-windows-servercore.
@@ -31,13 +32,17 @@ BUILDX_WINDOWS_BUILDER = windows-builder
 WINDOWS_VERSIONS = ltsc2019 ltsc2022
 WINDOWS_DOCKER_PUSH_ARGS = # When pushing set to --push.
 # Build with Windows support
-WITH_WINDOWS=1
+WITH_WINDOWS ?= 1
 # Build with ARM64 support
-WITH_ARM64=1
+WITH_ARM64 ?= 1
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 project_path := $(dir $(mkfile_path))
-server_tag = $(REGISTRY)/simple-game-server:0.16
+ifeq ($(REPOSITORY),)
+	server_tag := simple-game-server:0.17
+else
+	server_tag := $(REPOSITORY)/simple-game-server:0.17
+endif
 
 ifeq ($(WITH_WINDOWS), 1)
 server_tag_linux_amd64 = $(server_tag)-linux-amd64
@@ -82,9 +87,13 @@ endif
 ifeq ($(WITH_ARM64), 1)
 push: push-linux-image-arm64
 endif
-	-DOCKER_CLI_EXPERIMENTAL=enabled docker manifest rm $(server_tag)
-	DOCKER_CLI_EXPERIMENTAL=enabled docker manifest create $(server_tag) $(push_server_manifest)
-	DOCKER_CLI_EXPERIMENTAL=enabled docker manifest push $(server_tag) --purge
+	-docker manifest rm $(server_tag)
+	docker manifest create $(server_tag) $(push_server_manifest)
+	docker manifest push $(server_tag) --purge
+	# TODO: Update to replace `docker manifest` commands if/when the above commands fail (~Docker 24.x)
+    # Fails with Docker <=20.10.21
+	#docker buildx imagetools create --tag $(server_tag) \
+    	#$(push_server_manifest)
 
 # Pushes all variants of the Windows images to the container image registry.
 push-linux-image-amd64: build
@@ -99,14 +108,10 @@ push-windows-images: $(foreach winver, $(WINDOWS_VERSIONS), push-windows-image-$
 push-windows-image-%:
 	$(MAKE) WINDOWS_DOCKER_PUSH_ARGS=--push build-windows-image-$*
 
-build-windows-image-%: build-windows-binary ensure-windows-buildx
+build-windows-image-%: ensure-windows-buildx
 	cd $(root_path) && DOCKER_CLI_EXPERIMENTAL=enabled \
 		docker buildx build --platform windows/amd64 --builder $(BUILDX_WINDOWS_BUILDER) -f $(project_path)Dockerfile.windows \
-	 	--tag=$(server_tag)-windows_amd64-$* --build-arg WINDOWS_VERSION=$* examples/simple-game-server/ $(WINDOWS_DOCKER_PUSH_ARGS)
-
-# Builds the server binary for Windows (amd64).
-build-windows-binary:
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o bin/simple-game-server.exe main.go
+	 	--tag=$(server_tag)-windows_amd64-$* --build-arg WINDOWS_VERSION=$* . $(WINDOWS_DOCKER_PUSH_ARGS)
 
 ensure-windows-buildx:
 	# TODO: Remove `--use` and specify `--builder` for each buildx command once Docker 19.03.13 is available.
@@ -124,8 +129,12 @@ build-linux-image-arm64:
 
 # check if hosted on Google Artifact Registry
 gar-check:
-	gcloud container images describe $(server_tag)
+	gcloud container images describe $(PROD_REPO)/$(server_tag)
 
 #output the tag for this image
 echo-image-tag:
-	@echo $(server_tag)
+	@echo $(PROD_REPO)/$(server_tag)
+
+# build and push the simple-game-server image with specified tag
+cloud-build:
+	cd $(root_path) && gcloud builds submit --config=./examples/simple-game-server/cloudbuild.yaml

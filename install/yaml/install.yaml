@@ -50,7 +50,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 ---
@@ -75,7 +75,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 ---
@@ -100,7 +100,7 @@ metadata:
   namespace: default
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 ---
@@ -112,7 +112,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
-    chart: "agones-1.34.0-dev"
+    chart: "agones-1.35.0-dev"
     release: "agones-manual"
     heritage: "Helm"
 type: Opaque
@@ -129,7 +129,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
-    chart: "agones-1.34.0-dev"
+    chart: "agones-1.35.0-dev"
     release: "agones-manual"
     heritage: "Helm"
 data:
@@ -145,7 +145,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
-    chart: "agones-1.34.0-dev"
+    chart: "agones-1.35.0-dev"
     release: "agones-manual"
     heritage: "Helm"
 data:
@@ -161,7 +161,7 @@ metadata:
   namespace: agones-system
   labels:
     app: agones
-    chart: "agones-1.34.0-dev"
+    chart: "agones-1.35.0-dev"
     release: "agones-manual"
     heritage: "Helm"
 data:
@@ -191,7 +191,7 @@ metadata:
   labels:
     component: crd
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -280,6 +280,28 @@ spec:
                           anyOf:
                             - type: integer
                             - type: string
+                priorities:
+                  type: array
+                  description: Configuration of Counters and Lists scale down logic -- which gameservers in the Fleet are most important to keep around.
+                  nullable: true
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        description: Whether a Counter or a List.
+                        enum:
+                          - Counter
+                          - List
+                      key:
+                        type: string
+                        description: The name of the Counter or List. If not found on the GameServer, those GameServer with the key will have priority over those that do not.
+                      order:
+                        type: string
+                        description: Ascending or Descending sort order. Default is "Ascending" so remove smaller total capacity first. "Descending" would remove larger total capacity first.
+                        enum:
+                          - Ascending
+                          - Descending
                 template:                 
                  description: 'GameServer is the data structure for a GameServer resource.'
                  type: object
@@ -5416,7 +5438,7 @@ metadata:
   labels:
     component: crd
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -5606,7 +5628,7 @@ metadata:
   labels:
     component: crd
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -10578,6 +10600,17 @@ spec:
                        type: integer
                address:
                  type: string
+               addresses:
+                 type: array
+                 title: Array of addresses at which the GameServer can be reached; copy of Node.Status.addresses
+                 nullable: true
+                 items:
+                   type: object
+                   properties:
+                     address:
+                       type: string
+                     type:
+                       type: string
                nodeName:
                  type: string
                reservedUntil:
@@ -10681,7 +10714,7 @@ metadata:
   labels:
     component: crd
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
   name: gameserverallocationpolicies.multicluster.agones.dev
@@ -10760,7 +10793,7 @@ metadata:
   labels:
     component: crd
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -10829,6 +10862,28 @@ spec:
                   enum:
                     - Packed
                     - Distributed
+                priorities:
+                  type: array
+                  description: Configuration of Counters and Lists scale down logic. Priorities in the gameserverset.yaml file must be identical to the structure of priorities in fleet.yaml.
+                  nullable: true
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        description: Whether a Counter or a List.
+                        enum:
+                          - Counter
+                          - List
+                      key:
+                        type: string
+                        description: The name of the Counter or List
+                      order:
+                        type: string
+                        description: Ascending or Descending sort order
+                        enum:
+                          - Ascending
+                          - Descending
                 template:                  
                   description: 'GameServer is the data structure for a GameServer resource.'
                   type: object
@@ -15948,7 +16003,7 @@ metadata:
   name: agones-allocator
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 rules:
@@ -15978,7 +16033,7 @@ metadata:
   name: agones-controller
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 rules:
@@ -16032,7 +16087,7 @@ metadata:
   name: agones-sdk
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 rules:
@@ -16051,7 +16106,7 @@ metadata:
   name: agones-allocator
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 subjects:
@@ -16070,7 +16125,7 @@ metadata:
   name: agones-controller-access
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 subjects:
@@ -16122,7 +16177,7 @@ metadata:
   namespace: default
   labels:
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 subjects:
@@ -16156,7 +16211,7 @@ metadata:
   labels:
     agones.dev/role: controller
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16189,7 +16244,7 @@ metadata:
   labels:
     agones.dev/role: extensions
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16209,7 +16264,7 @@ metadata:
   labels:
     component: ping
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16231,7 +16286,7 @@ metadata:
   labels:
     component: ping
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16267,7 +16322,7 @@ metadata:
   labels:
     agones.dev/role: extensions
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16304,7 +16359,7 @@ metadata:
   labels:
     component: allocator
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16326,7 +16381,7 @@ metadata:
   labels:
     multicluster.agones.dev/role: allocator
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16360,7 +16415,7 @@ metadata:
   labels:
     component: controller
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16402,7 +16457,7 @@ spec:
       serviceAccountName: agones-controller
       containers:
       - name: agones-controller
-        image: "us-docker.pkg.dev/agones-images/release/agones-controller:1.34.0-dev"
+        image: "us-docker.pkg.dev/agones-images/release/agones-controller:1.35.0-dev"
         imagePullPolicy: IfNotPresent
         env:
         # minimum port that can be exposed to GameServer traffic
@@ -16412,7 +16467,7 @@ spec:
         - name: MAX_PORT
           value: "8000"
         - name: SIDECAR_IMAGE # overwrite the GameServer sidecar image that is used
-          value: "us-docker.pkg.dev/agones-images/release/agones-sdk:1.34.0-dev"
+          value: "us-docker.pkg.dev/agones-images/release/agones-sdk:1.35.0-dev"
         - name: ALWAYS_PULL_SIDECAR # set the sidecar imagePullPolicy to Always
           value: "false"
         - name: SIDECAR_CPU_REQUEST
@@ -16448,7 +16503,7 @@ spec:
         - name: CLOUD_PRODUCT
           value: "auto"
         - name: LOG_DIR
-          value: "/home/agones/logs"
+          value: "/logs"
         - name: LOG_SIZE_LIMIT_MB
           value: "10000"
         - name: POD_NAME
@@ -16483,10 +16538,10 @@ spec:
             ephemeral-storage: 10100Mi
         volumeMounts:
         - name: certs
-          mountPath: /home/agones/certs
+          mountPath: /certs
           readOnly: true
         - name: logs
-          mountPath: /home/agones/logs
+          mountPath: /logs
           readOnly: false
       volumes:
       - name: certs
@@ -16517,7 +16572,7 @@ metadata:
   labels:
     component: extensions
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16561,7 +16616,7 @@ spec:
       terminationGracePeriodSeconds: 27
       containers:
       - name: agones-extensions
-        image: "us-docker.pkg.dev/agones-images/release/agones-extensions:1.34.0-dev"
+        image: "us-docker.pkg.dev/agones-images/release/agones-extensions:1.35.0-dev"
         imagePullPolicy: IfNotPresent
         env:
         - name: PROMETHEUS_EXPORTER
@@ -16587,7 +16642,7 @@ spec:
         - name: CLOUD_PRODUCT
           value: "auto"
         - name: LOG_DIR
-          value: "/home/agones/logs"
+          value: "/logs"
         - name: LOG_SIZE_LIMIT_MB
           value: "10000"
         - name: POD_NAME
@@ -16629,10 +16684,10 @@ spec:
             ephemeral-storage: 10100Mi
         volumeMounts:
         - name: certs
-          mountPath: /home/agones/certs
+          mountPath: /certs
           readOnly: true
         - name: logs
-          mountPath: /home/agones/logs
+          mountPath: /logs
           readOnly: false
       volumes:
       - name: certs
@@ -16663,7 +16718,7 @@ metadata:
   labels:
     component: ping
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16698,7 +16753,7 @@ spec:
       priorityClassName: agones-system
       containers:
         - name: agones-ping
-          image: "us-docker.pkg.dev/agones-images/release/agones-ping:1.34.0-dev"
+          image: "us-docker.pkg.dev/agones-images/release/agones-ping:1.35.0-dev"
           imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
@@ -16772,7 +16827,7 @@ spec:
           secretName: allocator-client-ca
       containers:
       - name: agones-allocator
-        image: "us-docker.pkg.dev/agones-images/release/agones-allocator:1.34.0-dev"
+        image: "us-docker.pkg.dev/agones-images/release/agones-allocator:1.35.0-dev"
         imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
@@ -16853,7 +16908,7 @@ metadata:
   labels:
     component: controller
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 spec:
@@ -16904,7 +16959,7 @@ metadata:
   labels:
     component: controller
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 webhooks:
@@ -16956,7 +17011,7 @@ metadata:
   labels:
     component: controller
     app: agones
-    chart: agones-1.34.0-dev
+    chart: agones-1.35.0-dev
     release: agones-manual
     heritage: Helm
 webhooks:
